@@ -1,3 +1,9 @@
+# Random files
+pygame-box2d.py
+pygame-display.py
+pygame-keyboard.py
+pygame-loop.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
