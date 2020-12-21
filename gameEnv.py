@@ -56,6 +56,7 @@ class GameEnv(gym.Env):
     def step(self, action):
         done = False
         reward = 0
+        self.step_counter += 0.05
         # get increment from discrete action 
         increment = self._get_vel_from_action(action)
         # Move robot in desired direction
@@ -74,7 +75,7 @@ class GameEnv(gym.Env):
           or self.screen.get_at(right_sensor)[:3] == COLOR_WALL
            or self.screen.get_at(left_sensor)[:3] == COLOR_WALL):
             self.robot.move_ip(-increment[0], -increment[1])
-            reward -= 10
+            reward -= 5
 
         if self.debug:
             print(str(self.screen.get_at(top_sensor)[:3]))
@@ -89,23 +90,26 @@ class GameEnv(gym.Env):
         time.sleep(SIM_PERIOD_MS/1000.0)
 
         obs = self._get_obs()
-        print(str(obs))
+
+        # Reward calculation
         # Check if goal is reached
         if obs == (GOAL_X, GOAL_Y):
             reward += 100
             done = True
         # Use dense reward signal as L1 norm    
         else:
-            reward +=  1/(GOAL_X - obs[0]) * 100
-            reward += 1/(GOAL_Y - obs[1]) * 100
-            
+            reward += 7 - (GOAL_X - obs[0]) * 0.01
+            reward += 5 - (GOAL_Y - obs[1]) * 0.01
+
+        # Penalize time spent    
+        reward -= self.step_counter
 
         if self.debug:
             print("Reward: "+str(reward))
             print("Current cell: "+str(obs))
             print("Action taken: "+str(action))
 
-        return obs, reward, done, None
+        return obs, reward, done, {}
 
     def reset(self):
         for iX in range(self.nX):
@@ -121,6 +125,7 @@ class GameEnv(gym.Env):
                                               pygame.Rect(self.pixelX*self.initX+self.pixelX/4.0, self.pixelY*self.initY+self.pixelY/4.0, self.pixelX/2.0, self.pixelY/2.0))
         pygame.display.flip()
         time.sleep(0.5)
+        self.step_counter = 0.0
 
         return self._get_obs()
 

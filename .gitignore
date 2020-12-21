@@ -3,6 +3,7 @@ pygame-box2d.py
 pygame-display.py
 pygame-keyboard.py
 pygame-loop.py
+*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
