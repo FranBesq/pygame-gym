@@ -13,21 +13,23 @@ COLOR_ROBOT = (255, 0, 0)
 
 SIM_PERIOD_MS = 500.0
 
-GOAL_X = 14
-GOAL_Y = 10
+GOAL_X = 580 # This should be calculated like initial pos of robot
+GOAL_Y = 420 # This should be calculated like initial pos of robot
 
 # Actions
-UP = 1
-DOWN = 2
-RIGHT = 3
-LEFT = 4
+UP = 0
+DOWN = 1
+RIGHT = 2
+LEFT = 3
 
 
 class GameEnv(gym.Env):
     """Custom Environment to control Ecron robot in openrave using gym interface"""
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, initX=2, initY=2, map="map/map1.csv"):
+    def __init__(self, initX=2, initY=2, map="map/map1.csv", debug=False):
+
+        self.debug = debug
 
         inFileStr = map
         self.inFile = np.genfromtxt(inFileStr, delimiter=',')
@@ -38,31 +40,70 @@ class GameEnv(gym.Env):
         self.pixelX = SCREEN_WIDTH/self.nX
         self.pixelY = SCREEN_HEIGHT/self.nY
         # Initialize screen
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32)
+        self.screen = pygame.display.set_mode(
+            (SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32)
         self.screen.fill(COLOR_BACKGROUND)
         # Set initial robot pos
-        self.initX = 2
-        self.initY = 2
+        self.initX = initX
+        self.initY = initY
+
+        # Define discrete action space
+        self.action_space = spaces.Discrete(4)
+        # Define obs space as a single pixel
+        self.observation_space = spaces.Box(low=0, high=max(SCREEN_WIDTH, SCREEN_HEIGHT), shape=
+                (2,), dtype=np.uint16)
 
     def step(self, action):
         done = False
         reward = 0
+        # get increment from discrete action 
+        increment = self._get_vel_from_action(action)
         # Move robot in desired direction
         pygame.draw.rect(self.screen, COLOR_BACKGROUND, self.robot)
-        #self.robot.move_ip(incrementX, incrementY)
-        self.robot.move_ip(0,self.pixelY/2.0)
-        #Update screen
+        self.robot.move_ip(increment[0], increment[1])
+
+        # Define collision sensors so they dont overflow screen size
+        top_sensor = (self.robot.midtop[0], max(self.robot.midtop[1] - 1, 0))
+        bottom_sensor = (self.robot.midbottom[0], min(self.robot.midbottom[1] + 1, SCREEN_HEIGHT))
+        right_sensor = (min(self.robot.midright[0] + 1 , SCREEN_WIDTH), self.robot.midright[1])
+        left_sensor = (max(self.robot.midleft[0] - 1, 0), self.robot.midleft[1])
+
+        # In case of collision revert move
+        if (self.screen.get_at(top_sensor)[:3] == COLOR_WALL
+         or self.screen.get_at(bottom_sensor)[:3] == COLOR_WALL
+          or self.screen.get_at(right_sensor)[:3] == COLOR_WALL
+           or self.screen.get_at(left_sensor)[:3] == COLOR_WALL):
+            self.robot.move_ip(-increment[0], -increment[1])
+            reward -= 10
+
+        if self.debug:
+            print(str(self.screen.get_at(top_sensor)[:3]))
+            print(str(self.screen.get_at(bottom_sensor)[:3]))
+            print(str(self.screen.get_at(right_sensor)[:3]))
+            print(str(self.screen.get_at(left_sensor)[:3]))
+
+        # Update screen
         pygame.draw.rect(self.screen, COLOR_ROBOT, self.robot)
         pygame.display.update()
 
         time.sleep(SIM_PERIOD_MS/1000.0)
 
         obs = self._get_obs()
+        print(str(obs))
+        # Check if goal is reached
+        if obs == (GOAL_X, GOAL_Y):
+            reward += 100
+            done = True
+        # Use dense reward signal as L1 norm    
+        else:
+            reward +=  1/(GOAL_X - obs[0]) * 100
+            reward += 1/(GOAL_Y - obs[1]) * 100
+            
 
-        #if self.debug
-        #    print("Reward: "+str(reward))
-        #    print("Current cell: "+str(obs))
-        #    print("Action taken: "+str(action))
+        if self.debug:
+            print("Reward: "+str(reward))
+            print("Current cell: "+str(obs))
+            print("Action taken: "+str(action))
 
         return obs, reward, done, None
 
@@ -89,27 +130,23 @@ class GameEnv(gym.Env):
     # Returns a vector with every pixel color from screen
     def _get_obs(self):
         pixArray = []
-        maxW = int(self.screen.get_width())
-        maxH = int(self.screen.get_height())
-        for i in range(maxW):
-            for j in range(maxH):
-                pixArray.append(self.screen.get_at((i, j))[:3])
+        #maxW = int(self.screen.get_width())
+        #maxH = int(self.screen.get_height())
+        # for i in range(maxW):
+        #    for j in range(maxH):
+        #        pixArray.append(self.screen.get_at((i, j))[:3])
+#
+        # print(str(self.robot.center))
+        return self.robot.center
 
-        return pixArray
-
-    # Given a discrete action returns velocity vector
+    # Given a discrete action returns pixels to move and direction
     def _get_vel_from_action(self, action):
-        # Go backwards
-        if action == DOWN:
-            return
-        # Turn right
+        if action == UP:
+            return [0, -self.pixelY/2.0]
+        elif action == DOWN:
+            return [0, self.pixelY/2.0]
         elif action == RIGHT:
-            return
-        # Turn left
+            return [self.pixelX/2.0, 0]
         elif action == LEFT:
-            return
-        # Go straight
-        elif action == UP:
-            return
-
-        return
+            return  [-self.pixelX/2.0, 0]
+        return None
