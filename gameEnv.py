@@ -24,12 +24,13 @@ LEFT = 3
 
 
 class GameEnv(gym.Env):
-    """Custom Environment to control Ecron robot in openrave using gym interface"""
+    """Custom Environment that uses Pygame to create the env"""
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, initX=2, initY=2, map="map/map1.csv", debug=False):
+    def __init__(self, initX=2, initY=2, map="map/map1.csv", debug=False, randIni=True):
 
         self.debug = debug
+        self.randIni = randIni
 
         inFileStr = map
         self.inFile = np.genfromtxt(inFileStr, delimiter=',')
@@ -46,7 +47,10 @@ class GameEnv(gym.Env):
         # Set initial robot pos
         self.initX = initX
         self.initY = initY
-
+        #Some random positions to start from, CAREFUL to not put these inside walls
+        if self.randIni:
+            self.randPos = [[initX, initY], [2, 9], [12,2], [12,6]]
+            self.randPosLen = len(self.randPos)
         # Define discrete action space
         self.action_space = spaces.Discrete(4)
         # Define obs space as a single pixel
@@ -112,6 +116,13 @@ class GameEnv(gym.Env):
         return obs, reward, done, {}
 
     def reset(self):
+        
+        if self.randIni:
+            # Get random position from a list of initial points
+            randPoint = np.random.randint(0, high=(self.randPosLen-1))
+            self.initX = self.randPos[randPoint][0]
+            self.initY = self.randPos[randPoint][1]
+
         for iX in range(self.nX):
             # print "iX:",iX
             for iY in range(self.nY):
